@@ -7,6 +7,9 @@ import mcu, stepper, config, stupidArtnet , time , queue
 
 class Controller:
     def __init__(self,part_id, mcu, steppers_config, dmx_universe ,  dmx_start_address, dmx_channel_mode):
+        self.oid = 1  # Start OID allocation from 1
+        self.objects = {}
+       
         self.id = part_id
         self.mcu = mcu
         
@@ -20,18 +23,23 @@ class Controller:
         self.dmx_values_new = []
         self.dmx_cycles = 100
 
+
+
+
+
         #create stepper objects
         for config in steppers_config:
             stepper_inst = stepper.Stepper(
                 controller=self,
+                oid = self.alloc_oid(),
                 mcu=self.mcu,                
                 stepper_id =config['stepper_id'],
                 step_pin=config['step_pin'],
                 dir_pin=config['dir_pin'],
                 enable_pin=config['enable_pin'],
+                endstop_pin=config['endstop_pin'],
                 uart_pin=config['uart_pin'],
                 uart_diag=config['uart_diag'],
-                endstop_pin=config['endstop_pin'],
                 steps_per_rotation=config['steps_per_rotation'],
                 max_speed=config['max_speed'],
                 acceleration=config['acceleration'],
@@ -53,7 +61,29 @@ class Controller:
         self.move_cmd_queue = queue.Queue()
         self.fast_cmd_queue = queue.Queue()
         
+    def alloc_oid(self):
+        next_oid = self.oid
+        self.oid += 1
+        return next_oid
+
+    def register_object(self, obj):
+        oid = self.alloc_oid()
+        self.objects[oid] = obj
+        return oid
     
+
+    # get stepper setup commands for the mcu
+    def setup_steppers(self):
+        for stepper in self.steppers:
+            self.fast_cmd_queue.put(stepper.setup())
+            self.fast_cmd_queue.put(stepper.setup_endstop(self.alloc_oid()))
+            
+            
+    #get endstop setup commands for the mcu
+    def setup_endstops(self):
+        for stepper in self.steppers:           
+            self.fast_cmd_queue.put(stepper.setup_endstop(self.alloc_oid()))
+            
     # create a callback to handle artnet data
     def artnet_callback(self, data):
         """Test function to receive callback data."""
@@ -78,7 +108,9 @@ class Controller:
         for i, stepper in enumerate(self.steppers):
             for j in range(self.dmx_channel_mode):
                 self.set_dmx_values(stepper, j, self.dmx_values_new[i * self.dmx_channel_mode + j])                                    
+    
 
+    # used for further control mechanics
     def manual_mode(self):
         pass    
 
@@ -89,6 +121,12 @@ class Controller:
     #main thread
     def run(self):
         self.mcu.connect()
+        self.setup_steppers()
+        self.setup_endstops()
+        while not self.fast_cmd_queue.empty():
+            self.mcu.send_command(self.fast_cmd_queue.get())
+
+
         while 1:
             #read dmx values from artnet if 100 cycles have passed
             if self.dmx_cycles == 100:

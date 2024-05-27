@@ -1,10 +1,12 @@
 class Stepper:
-    def __init__(self, controller, mcu, stepper_id, oid, step_pin, dir_pin, enable_pin, steps_per_rotation, max_speed,
+    def __init__(self, controller, oid, mcu, stepper_id, step_pin, dir_pin, enable_pin, endstop_pin, steps_per_rotation, max_speed,
                  acceleration, microsteps, uart_pin, uart_diag , stealthchop_threshold, dmx_start_address, dmx_channel_mode):
         self.controller = controller
-        self.stepper_id = stepper_id
-        self.mcu = mcu
         self.oid = oid
+        self.stepper_id = stepper_id
+        
+        self.mcu = mcu
+    
         self.step_pin = step_pin
         self.dir_pin = dir_pin
         self.enable_pin = enable_pin
@@ -15,6 +17,8 @@ class Stepper:
         self.steps_per_rotation = steps_per_rotation * microsteps
         self.max_speed = max_speed
         self.acceleration = acceleration
+        self.inverted = False
+        self.step_pulse_ticks = 0.01
               
         self.stealthchop_threshold = stealthchop_threshold
   
@@ -53,7 +57,22 @@ class Stepper:
         self.dmx_channel_values = []
         self.add_dmx_channels(dmx_start_address, dmx_channel_mode)
 
+    ########### Setup ###########
+    #main setup function to register the stepper with the mcu
+    def setup_stepper(self):
+        return self.setup_stepper_pins()
+        
 
+
+        # Set up the micro-controller pins for the stepper
+    def setup_stepper_pins(self):
+        return f"`config_stepper oid={self.oid} step_pin={self.step_pin} dir_pin={self.dir_pin} invert_step={self.inverted} step_pulse_ticks={self.step_pulse_ticks}`"
+    
+    # Set up the micro-controller endstop for the stepper    
+    def setup_mcu_endstop(self, oid):    
+        return f"config_endstop oid={oid} pin={self.endstop_pin} pull_up=%c stepper_count=%c"
+
+    
     def add_dmx_channels(self, start_address, dmx_channel_mode):
         # Add the DMX channels for this stepper
         for i in range(dmx_channel_mode):
@@ -113,7 +132,7 @@ class Stepper:
         
         return True
                 
-
+    #calculate the next step time for acceleration
     def calculate_next_step(self):
         target = self.target
         steps_to_move = target - self.position
@@ -150,12 +169,13 @@ class Stepper:
         self.controller.move_cmd_queue.put(self.create_step(next_cycle_time))
         #update the position of the controller stepper
         self.position = self.position + self.pos_direction
+        
 
     #Command to queue a step
     def create_step(self, interval):
          return f"queue_step oid={self.oid} interval={interval} count=1 add=0"    
 
-    #Command to set direction pin  
+    #Command to set direction pin, this command will be put directly in the fast_cmd_queue of the controller
     def set_next_step_dir(self, direction):      
        return f"set_next_step_dir oid={self.oid} dir={direction}"     
 
