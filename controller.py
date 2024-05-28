@@ -18,7 +18,8 @@ class Controller:
         self.dmx_start_address = dmx_start_address
         self.dmx_channel_mode = dmx_channel_mode
         self.dmx_debug_channel = 2
-        self.steppers = []        
+        self.steppers = [] 
+        self.endstops = []
         self.dmx_values_old = []
         self.dmx_values_new = []
         self.dmx_cycles = 100
@@ -61,6 +62,23 @@ class Controller:
         self.move_cmd_queue = queue.Queue()
         self.fast_cmd_queue = queue.Queue()
         
+    def register_callbacks(self):
+        self.mcu.register_callback('endstop_triggered', self.endstop_triggered)
+        
+
+    #if the endstop was triggered, set the position of the stepper to 0    
+    def endstop_triggered(self, data):
+        oid = data['oid']  # Assuming the 'oid' is passed in the 'data' parameter
+        if oid in self.objects:
+            stepper = self.steppers[oid-len(self.steppers)]
+            stepper.set_position(0)  
+        else:
+            print(f"Stepper with OID {oid} not found.")
+
+    
+        
+        self.objects[oid].endstop_triggered(data)
+        
     def alloc_oid(self):
         next_oid = self.oid
         self.oid += 1
@@ -85,7 +103,7 @@ class Controller:
             self.fast_cmd_queue.put(stepper.setup_endstop(self.alloc_oid()))
             
     # create a callback to handle artnet data
-    def artnet_callback(self, data):
+    def artnet_callback(data):
         """Test function to receive callback data."""
         # the received data is an array
         # of the channels value (no headers)
