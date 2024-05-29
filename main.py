@@ -4,7 +4,6 @@ import time
 from mcu import MCU
 from stupidArtnet import StupidArtnetServer
 import stepper
-import config
 
 # Create a callback to handle data when received from artnet
 def test_callback(data):
