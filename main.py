@@ -20,7 +20,16 @@ if __name__ == "__main__":
     config_file_path = 'config.cfg'  # Provide the path to your configuration file
     
     # Read the configuration file
-    part_id, mcu_port, mcu_baudrate, steppers_config, dmx_universe, dmx_start_address,dmx_channel_mode = config.ConfigReader.read_config(config_file_path)
+    config_parser = configparser.ConfigParser()
+    config_parser.read(config_file_path)
+    
+    part_id = config_parser.get('General', 'part_id')
+    mcu_port = config_parser.get('General', 'mcu_port')
+    mcu_baudrate = config_parser.get('General', 'mcu_baudrate')
+    steppers_config = config_parser.get('General', 'steppers_config')
+    dmx_universe = config_parser.get('General', 'dmx_universe')
+    dmx_start_address = config_parser.get('General', 'dmx_start_address')
+    dmx_channel_mode = config_parser.get('General', 'dmx_channel_mode')
 
     # Create an MCU object
     mcu = MCU(mcu_port, mcu_baudrate)
@@ -32,4 +41,3 @@ if __name__ == "__main__":
         controller.run()
     except KeyboardInterrupt:
         controller.stop()
-        

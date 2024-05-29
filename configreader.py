@@ -1,6 +1,6 @@
-import configparser
+from configparser import ConfigParser
 
-class ConfigReader:
+class ConfigParser:
     
     def read_config(file_path):
         config = configparser.ConfigParser()
