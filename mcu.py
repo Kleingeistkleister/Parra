@@ -1,21 +1,22 @@
 import serial
 import threading
 
+
 class MCU:
     def __init__(self, port, baudrate):
-        
         self.ser = serial.Serial(port, baudrate, timeout=1)
         self.running = True
         self.callback_handlers = {}
         self.listener_thread = threading.Thread(target=self.listen_for_callbacks)
         self.listener_thread.start()
-    
-    # Send a command to the MCU without waiting for a response
+
+        # Initialize the CommandWrapper
+        self.command_wrapper = CommandWrapper(self, "command_format")
+
     def send_command(self, command):
         self.ser.write((command + '\n').encode(('utf-8')))
         self.ser.flush()
-        
-    # Send it with response        
+
     def send_command_response(self, command):
         self.ser.write((command + '\n').encode(('utf-8')))
         self.ser.flush()
@@ -38,9 +39,29 @@ class MCU:
 
     def register_callback(self, callback_type, handler):
         self.callback_handlers[callback_type] = handler
-    
 
     def stop(self):
         self.running = False
         self.listener_thread.join()
         self.ser.close()
+
+class CommandWrapper:
+    def __init__(self, serial, msgformat, cmd_queue=None):
+        self._serial = serial
+        msgparser = serial.get_msgparser()
+        self._cmd = msgparser.lookup_command(msgformat)
+        if cmd_queue is None:
+            cmd_queue = serial.get_default_command_queue()
+        self._cmd_queue = cmd_queue
+        self._msgtag = msgparser.lookup_msgtag(msgformat) & 0xffffffff
+
+    def send(self, data=(), minclock=0, reqclock=0):
+        cmd = self._cmd.encode(data)
+        self._serial.raw_send(cmd, minclock, reqclock, self._cmd_queue)
+
+    def send_wait_ack(self, data=(), minclock=0, reqclock=0):
+        cmd = self._cmd.encode(data)
+        self._serial.raw_send_wait_ack(cmd, minclock, reqclock, self._cmd_queue)
+
+    def get_command_tag(self):
+        return self._msgtag
